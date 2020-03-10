@@ -1,11 +1,9 @@
 import cv2
 import numpy as np
-import time
 
 def open_label_file(path):
     with open(path, 'r') as label:
         objects_information = []
-
         for line in label:
             line = line.split()
             if len(line) == 5:  # 0: class, 1:x, 2:y, 3:w, 4:h
@@ -14,7 +12,6 @@ def open_label_file(path):
                     object_information.append(float(data))
                 objects_information.append(object_information)
         objects_information = np.asarray(objects_information).astype(np.float32)
-
         return objects_information
 
 def xywhToxyxy(xywh_label):
@@ -124,16 +121,21 @@ def hsvColorSpaceJitter(img, hGain=0.5, sGain=0.5, vGain=0.5, p=0.5):
         return augmented_img
     return img
 
-def horFlip(img, xywh_label, p=0.5):
+def horFlip(img, scaled_xyxy_label, p=0.5):
     if np.random.rand() < p:
-        augmented_img = img.copy()
-        augmented_xywh_label = xywh_label.copy()
-        augmented_img = cv2.flip(augmented_img, 1)#1이 호리즌탈 방향 반전
-        augmented_xywh_label[:, 1] = 1. - augmented_xywh_label[:, 1] # normalized xywh format
-        return augmented_img, augmented_xywh_label
-    return img, xywh_label
+        img_h, img_w = img.shape[0:2]
+        augmented_img = cv2.flip(img, 1)#1이 호리즌탈 방향 반전
+        augmented_scaled_xyxy_label = scaled_xyxy_label.copy()
+        augmented_normalized_xyxy_label = ScaledToNormalizedCoord(augmented_scaled_xyxy_label, img_w, img_h)
+        augmented_normalized_xywh_label = xyxyToxywh(augmented_normalized_xyxy_label)
+        augmented_normalized_xywh_label[:, 1] = 1. - augmented_normalized_xywh_label[:, 1] # normalized xywh format
 
-def randomTranslation(img, scaled_xyxy_label, p=0.5):
+        augmented_scaled_xyxy_label = NormalizedToScaledCoord(xywhToxyxy(augmented_normalized_xywh_label), img_w, img_h)
+
+        return augmented_img, augmented_scaled_xyxy_label
+    return img, scaled_xyxy_label
+
+def randomTranslation(img, scaled_xyxy_label, p=0.5, padded_val=127):
     if np.random.rand() < p:
         img_h, img_w = img.shape[0:2]
         augmented_img = img.copy()
@@ -146,7 +148,7 @@ def randomTranslation(img, scaled_xyxy_label, p=0.5):
         tm = np.float32([[1, 0, tx],
                          [0, 1, ty]])  # [1, 0, tx], [1, 0, ty]
 
-        augmented_img = cv2.warpAffine(augmented_img, tm, (img_w, img_h), borderValue=(0, 0, 0))
+        augmented_img = cv2.warpAffine(augmented_img, tm, (img_w, img_h), borderValue=(padded_val, padded_val, padded_val))
 
         scaled_augmented_xyxy_label[:, [1,3]] += tx
         scaled_augmented_xyxy_label[:, [2,4]] += ty
@@ -158,7 +160,7 @@ def randomTranslation(img, scaled_xyxy_label, p=0.5):
 
     return img, scaled_xyxy_label
 
-def randomRotation(img, scaled_xyxy_label, angle_degree=10., p=0.5):
+def randomRotation(img, scaled_xyxy_label, angle_degree=10., p=0.5, padded_val=127):
     if np.random.rand() < p:
         augmented_img = img.copy()
         scaled_augmented_xyxy_label = scaled_xyxy_label.copy()
@@ -168,7 +170,7 @@ def randomRotation(img, scaled_xyxy_label, angle_degree=10., p=0.5):
         n = len(scaled_augmented_xyxy_label)
 
         rm = cv2.getRotationMatrix2D((img_w // 2, img_h // 2), random_angle_degree, 1)
-        augmented_img = cv2.warpAffine(augmented_img, rm, (img_w, img_h), flags=cv2.INTER_AREA, borderValue=(0, 0, 0))
+        augmented_img = cv2.warpAffine(augmented_img, rm, (img_w, img_h), flags=cv2.INTER_AREA, borderValue=(padded_val, padded_val, padded_val))
 
         bboxes_tl_br_point = scaled_augmented_xyxy_label[:, 1:5]
         bboxes_tl_tr_bl_br_points = np.ones((n, 4, 3))
@@ -193,7 +195,7 @@ def randomRotation(img, scaled_xyxy_label, angle_degree=10., p=0.5):
 
     return img, scaled_xyxy_label
 
-def randomShear(img, scaled_xyxy_label, shear_degree=7.5, p=0.5):
+def randomShear(img, scaled_xyxy_label, shear_degree=7.5, p=0.5, padded_val=127):
     if np.random.rand() < p:
         augmented_img = img.copy()
         scaled_augmented_xyxy_label = scaled_xyxy_label.copy()
@@ -212,7 +214,7 @@ def randomShear(img, scaled_xyxy_label, shear_degree=7.5, p=0.5):
                                        sm,
                                        (img_w, img_h),
                                        flags=cv2.INTER_AREA,
-                                       borderValue=(0, 0, 0))
+                                       borderValue=(padded_val, padded_val, padded_val))
 
         bboxes_tl_br_point = scaled_augmented_xyxy_label[:, 1:5]
         bboxes_tl_tr_bl_br_points = np.ones((n, 4, 3))
@@ -238,7 +240,7 @@ def randomShear(img, scaled_xyxy_label, shear_degree=7.5, p=0.5):
     return img, scaled_xyxy_label
 
 
-def randomScale(img, scaled_xyxy_label, scale=[-0.25, 0.25], p=0.5):
+def randomScale(img, scaled_xyxy_label, scale=[-0.25, 0.25], p=0.5, padded_val=127):
     if np.random.rand() < p:
         augmented_img = img.copy()
         scaled_augmented_xyxy_label = scaled_xyxy_label.copy()
@@ -249,7 +251,7 @@ def randomScale(img, scaled_xyxy_label, scale=[-0.25, 0.25], p=0.5):
         #scaling matrix_img
         sm = cv2.getRotationMatrix2D(angle=0., center=(img_w / 2, img_h / 2), scale=random_scale) # 이미지 좌표 중심점 기준으로 축소 및 확대 + 0도 회전
         augmented_img = cv2.warpAffine(augmented_img, sm, (img_w, img_h), flags= cv2.INTER_AREA,
-                                       borderValue=(0, 0, 0))
+                                       borderValue=(padded_val, padded_val, padded_val))
 
         bboxes_tl_br_point = scaled_augmented_xyxy_label[:, 1:5]
         bboxes_tl_tr_bl_br_points = np.ones((n, 4, 3))
@@ -279,30 +281,75 @@ def drawBBox(img, scaled_xyxy_label):
         #print(bbox)
         cv2.rectangle(img, (bbox[1], bbox[2]), (bbox[3], bbox[4]), (0,255,0),2)
 
+def resize_img(img, target_resize, normalized_xywh_label=None, use_letterbox=True, padded_value = (127, 127, 127)):
+    h, w = img.shape[0], img.shape[1]
+    target_h, target_w = target_resize[1], target_resize[0]
+
+    padded_value = (127, 127, 127)
+
+    if use_letterbox:
+        if h > w:
+            h_scale = target_h / h
+            resized_w = np.clip(np.rint(w * h_scale).astype(np.uint32), 0, target_w)
+            resized_img = cv2.resize(img, (resized_w, target_h))
+            scaled_xyxy_label = NormalizedToScaledCoord(xywhToxyxy(normalized_xywh_label), resized_w, target_h)
+
+            padded_w = target_w - resized_w
+            padded_left = padded_w // 2
+            padded_right = padded_w - padded_left
+            resized_img = cv2.copyMakeBorder(resized_img,
+                                             0, 0, padded_left, padded_right,
+                                             cv2.BORDER_CONSTANT,
+                                             value=padded_value)
+
+            scaled_xyxy_label[:, [1, 3]] += padded_left
+        else:
+            w_scale = target_w / w
+            resized_h = np.clip(np.rint(h * w_scale).astype(np.uint32), 0, target_h)
+            resized_img = cv2.resize(img, (target_w, resized_h))
+            scaled_xyxy_label = NormalizedToScaledCoord(xywhToxyxy(normalized_xywh_label), target_w, resized_h)
+
+            padded_h = target_h - resized_h
+            padded_top = padded_h // 2
+            padded_bot = padded_h - padded_top
+            resized_img = cv2.copyMakeBorder(resized_img,
+                                             padded_top, padded_bot, 0, 0,
+                                             cv2.BORDER_CONSTANT,
+                                             value=padded_value)
+
+            scaled_xyxy_label[:, [2, 4]] += padded_top
+    else:
+        resized_img = cv2.resize(img, (target_w, target_h))
+        scaled_xyxy_label = NormalizedToScaledCoord(xywhToxyxy(normalized_xywh_label), target_w, target_h)
+
+    return resized_img, scaled_xyxy_label
+
+
 if __name__ == '__main__':
     np.set_printoptions(precision=3, suppress =True)
 
     while(True):
-        img = cv2.imread("track0008[26].png", cv2.IMREAD_COLOR)
-        img = cv2.resize(img, (416, 416))
-        img_h, img_w = img.shape[0:2]
+        img = cv2.imread("000007.jpg", cv2.IMREAD_COLOR)
+        normalized_xywh_label = open_label_file("000007.txt")
 
-        normalized_xywh_label = open_label_file("track0008[26].txt")  # class, x, y, w, h
-        scaled_xyxy_label = NormalizedToScaledCoord(xywhToxyxy(normalized_xywh_label), img_w, img_h)
+        resized_img, scaled_xyxy_label = resize_img(img,
+                                                    target_resize=(416, 416),
+                                                    normalized_xywh_label=normalized_xywh_label,
+                                                    use_letterbox=True)
 
-        aug_img = hsvColorSpaceJitter(img, hGain=0.05, sGain=0.2, vGain=0.3, p=0.5)
-        aug_img, aug_normalized_xywh_label = horFlip(aug_img, normalized_xywh_label, p=0.5)
+        # augmentation gogo
+        aug_resized_img, aug_scaled_xyxy_label = horFlip(resized_img, scaled_xyxy_label, p=0.5)
+        aug_resized_img, aug_scaled_xyxy_label = randomScale(aug_resized_img, aug_scaled_xyxy_label, scale=[-0.25, 0.5], p=0.5)
+        aug_resized_img, aug_scaled_xyxy_label = randomTranslation(aug_resized_img, aug_scaled_xyxy_label, p=0.5)
+        aug_resized_img, aug_scaled_xyxy_label = randomShear(aug_resized_img, aug_scaled_xyxy_label, shear_degree=7.0, p=0.5)
+        aug_resized_img, aug_scaled_xyxy_label = randomRotation(aug_resized_img, aug_scaled_xyxy_label, angle_degree=7.0, p=0.5)
+        aug_resized_img = hsvColorSpaceJitter(aug_resized_img, hGain=0.05, sGain=0.2, vGain=0.3, p=0.5)
 
-        aug_scaled_xyxy_label = NormalizedToScaledCoord(xywhToxyxy(aug_normalized_xywh_label), img_w, img_h)
-        aug_img, aug_scaled_xyxy_label = randomScale(aug_img, aug_scaled_xyxy_label, scale=[-0.25, 2.0], p=0.5)
-        aug_img, aug_scaled_xyxy_label = randomTranslation(aug_img, aug_scaled_xyxy_label, p=0.5)
-        aug_img, aug_scaled_xyxy_label = randomShear(aug_img, aug_scaled_xyxy_label, shear_degree=7.0, p=0.5)
-        aug_img, aug_scaled_xyxy_label = randomRotation(aug_img, aug_scaled_xyxy_label, angle_degree=7.0, p=0.5)
+        drawBBox(aug_resized_img, aug_scaled_xyxy_label)
 
-        if len(aug_scaled_xyxy_label) > 0:
-            drawBBox(aug_img, aug_scaled_xyxy_label)
+        cv2.imshow("img", img)
+        cv2.imshow("aug_resized_img", aug_resized_img)
 
-        cv2.imshow("aug_img", aug_img)
         ch = cv2.waitKey(0)
         if ch == 27:
             break

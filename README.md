@@ -5,9 +5,9 @@ YOLO Augmentator is the project that augmentation methods for object detection d
 
 In this repositoty, I implemented 6 augmentation methods.
 
-You can easily check and understnad the results of each method through the visualization.
+You can easily check and understand the results of each method through the visualization.
 
-### Hor-Flip
+### Horizontal Flip
 
 [Example 움짤 첨부]()
 

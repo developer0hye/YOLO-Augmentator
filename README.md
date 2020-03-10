@@ -31,9 +31,9 @@ You can easily check and understand the results of each method through the visua
 
 [Example 움짤 첨부]()
 
-### Policy
+### Augmentation Policy
 
-Sometimes the objects in image are cropped or occluded by augmentation. In that case, the augmented data may harm the stability of training and performance of the network.
+Sometimes the objects in image are severely cropped or occluded by augmentation. In that case, the augmented data may harm the stability of training and performance of the network.
 
 [Example 움짤 첨부]()
 

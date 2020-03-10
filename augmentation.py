@@ -329,8 +329,8 @@ if __name__ == '__main__':
     np.set_printoptions(precision=3, suppress =True)
 
     while(True):
-        img = cv2.imread("000007.jpg", cv2.IMREAD_COLOR)
-        normalized_xywh_label = open_label_file("000007.txt")
+        img = cv2.imread("000017.jpg", cv2.IMREAD_COLOR)
+        normalized_xywh_label = open_label_file("000017.txt")
 
         resized_img, scaled_xyxy_label = resize_img(img,
                                                     target_resize=(416, 416),

@@ -65,7 +65,7 @@ def getIndexesOuterBBoxes(scaled_xyxy_label, img_w, img_h):
     indexes_outer_bbox |= (scaled_xyxy_label[:, 2] > img_h-1) & (scaled_xyxy_label[:, 4] > img_h-1)
     return indexes_outer_bbox
 
-def IOUbetweenWholeAndInnerBox(whole_bbox_label, inner_bbox_label):
+def IoUbetweenWholeAndInnerBox(whole_bbox_label, inner_bbox_label):
     bboxes_whole_area = (whole_bbox_label[:, 3] - whole_bbox_label[:, 1]) * (whole_bbox_label[:, 4] - whole_bbox_label[:, 2])
     bboxes_inner_area = (inner_bbox_label[:, 3] - inner_bbox_label[:, 1]) * (inner_bbox_label[:, 4] - inner_bbox_label[:, 2])
     ious_between_whole_and_inner = bboxes_inner_area / bboxes_whole_area
@@ -95,7 +95,7 @@ def checkApplyAugmentation(scaled_augmented_xyxy_label, img_w, img_h, th_iou=0.9
         return cliped_scaled_augmented_xyxy_label, False
 
     # 어그먼테이션 적용되고 나서 일부분만 보이는 오브젝트들 삭제
-    ious = IOUbetweenWholeAndInnerBox(scaled_augmented_xyxy_label, cliped_scaled_augmented_xyxy_label)
+    ious = IoUbetweenWholeAndInnerBox(scaled_augmented_xyxy_label, cliped_scaled_augmented_xyxy_label)
     indexesTooOccludedBBoxes = (ious <= th_iou)
 
     if np.count_nonzero(indexesTooOccludedBBoxes) > 0:
